@@ -10,6 +10,12 @@ const supabase = createClient(
 const prayerOptions = ["الفجر", "الظهر", "العصر", "المغرب", "العشاء", "الجمعة", "التراويح"];
 const typeOptions = ["إمام", "مؤذن", "معلم حلقة"];
 
+const statusColors = {
+  "نشط": { bg: "#E1F5EE", color: "#0F6E56" },
+  "تم العثور": { bg: "#E6F1FB", color: "#185FA5" },
+  "ملغي": { bg: "#f5f5f3", color: "#888" },
+};
+
 export default function Requests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,27 +23,18 @@ export default function Requests() {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [locating, setLocating] = useState(false);
   const [form, setForm] = useState({
-    title: "",
-    type: "",
-    city: "",
-    district: "",
-    mosque: "",
-    date_from: "",
-    date_to: "",
-    prayers: [],
-    notes: "",
-    phone: "",
+    title: "", type: "", city: "", district: "", mosque: "",
+    date_from: "", date_to: "", prayers: [], notes: "", phone: "",
+    latitude: null, longitude: null, location_name: "",
   });
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-      const { data } = await supabase
-        .from("requests")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data } = await supabase.from("requests").select("*").order("created_at", { ascending: false });
       if (data) setRequests(data);
       setLoading(false);
     }
@@ -53,6 +50,33 @@ export default function Requests() {
     }
   };
 
+  const getLocation = () => {
+    if (!navigator.geolocation) {
+      alert("المتصفح لا يدعم تحديد الموقع");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+          const data = await res.json();
+          const name = data.display_name?.split("،")[0] || "موقعك الحالي";
+          setForm({ ...form, latitude: lat, longitude: lng, location_name: name });
+        } catch {
+          setForm({ ...form, latitude: lat, longitude: lng, location_name: "موقعك الحالي" });
+        }
+        setLocating(false);
+      },
+      () => {
+        alert("تعذر تحديد الموقع، تأكد من السماح بالوصول");
+        setLocating(false);
+      }
+    );
+  };
+
   const handleSubmit = async () => {
     if (!form.title || !form.type || !form.city || !form.phone) {
       setMessage("يرجى تعبئة الحقول المطلوبة");
@@ -60,17 +84,13 @@ export default function Requests() {
     }
     setSubmitting(true);
     const { error } = await supabase.from("requests").insert({
-      title: form.title,
-      type: form.type,
-      city: form.city,
-      district: form.district,
-      mosque: form.mosque,
-      date_from: form.date_from,
-      date_to: form.date_to,
-      prayers: form.prayers.join("، "),
-      notes: form.notes,
-      phone: form.phone,
-      user_id: user?.id || null,
+      title: form.title, type: form.type, city: form.city,
+      district: form.district, mosque: form.mosque,
+      date_from: form.date_from || null, date_to: form.date_to || null,
+      prayers: form.prayers.join("، "), notes: form.notes,
+      phone: form.phone, user_id: user?.id || null, status: "نشط",
+      latitude: form.latitude, longitude: form.longitude,
+      location_name: form.location_name,
     });
     if (error) {
       setMessage("حدث خطأ، حاول مرة أخرى");
@@ -79,9 +99,14 @@ export default function Requests() {
       setShowForm(false);
       const { data } = await supabase.from("requests").select("*").order("created_at", { ascending: false });
       if (data) setRequests(data);
-      setForm({ title: "", type: "", city: "", district: "", mosque: "", date_from: "", date_to: "", prayers: [], notes: "", phone: "" });
+      setForm({ title: "", type: "", city: "", district: "", mosque: "", date_from: "", date_to: "", prayers: [], notes: "", phone: "", latitude: null, longitude: null, location_name: "" });
     }
     setSubmitting(false);
+  };
+
+  const handleStatusChange = async (id, newStatus) => {
+    await supabase.from("requests").update({ status: newStatus }).eq("id", id);
+    setRequests(requests.map(r => r.id === id ? { ...r, status: newStatus } : r));
   };
 
   const handleContact = (phone) => {
@@ -90,18 +115,20 @@ export default function Requests() {
     window.open(`https://wa.me/${wa}`, "_blank");
   };
 
+  const openMap = (lat, lng, name) => {
+    window.open(`https://www.google.com/maps?q=${lat},${lng}&z=17&hl=ar`, "_blank");
+  };
+
   const inputStyle = {
     width: "100%", border: "1px solid #ddd", borderRadius: 8,
     padding: "10px 14px", fontSize: 14, marginBottom: 12,
     boxSizing: "border-box", background: "#fff",
   };
-
   const labelStyle = { fontSize: 13, color: "#555", marginBottom: 4, display: "block" };
 
   return (
     <div dir="rtl" style={{ fontFamily: "system-ui, sans-serif", minHeight: "100vh", background: "#f9f9f7" }}>
 
-      {/* الهيدر */}
       <div style={{ background: "#fff", borderBottom: "1px solid #eee", padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#1D9E75" }} />
@@ -111,7 +138,7 @@ export default function Requests() {
       </div>
 
       <div style={{ maxWidth: 700, margin: "0 auto", padding: 24 }}>
-        
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>الطلبات</h1>
@@ -122,7 +149,6 @@ export default function Requests() {
           </button>
         </div>
 
-        {/* نموذج إضافة طلب */}
         {showForm && (
           <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eee", padding: 24, marginBottom: 24 }}>
             <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 20 }}>رفع طلب جديد</h2>
@@ -169,6 +195,17 @@ export default function Requests() {
               ))}
             </div>
 
+            {/* موقع المسجد */}
+            <label style={labelStyle}>موقع المسجد على الخريطة</label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button onClick={getLocation} disabled={locating} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid #ddd", background: form.latitude ? "#E1F5EE" : "#fff", color: form.latitude ? "#0F6E56" : "#555", fontSize: 13, cursor: "pointer" }}>
+                {locating ? "جاري التحديد..." : form.latitude ? `✅ ${form.location_name}` : "📍 حدد موقعي تلقائياً"}
+              </button>
+              {form.latitude && (
+                <button onClick={() => setForm({ ...form, latitude: null, longitude: null, location_name: "" })} style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", color: "#888", fontSize: 13, cursor: "pointer" }}>مسح</button>
+              )}
+            </div>
+
             <label style={labelStyle}>رقم التواصل (واتساب) *</label>
             <input style={inputStyle} placeholder="05xxxxxxxx" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
 
@@ -187,7 +224,6 @@ export default function Requests() {
           </div>
         )}
 
-        {/* قائمة الطلبات */}
         {loading ? (
           <p style={{ textAlign: "center", color: "#999" }}>جاري التحميل...</p>
         ) : requests.length === 0 ? (
@@ -198,21 +234,50 @@ export default function Requests() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {requests.map((r) => (
-              <div key={r.id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #eee", padding: 20 }}>
+              <div key={r.id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #eee", padding: 20, opacity: r.status === "ملغي" ? 0.6 : 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                   <div>
-                    <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{r.title}</h3>
-                    <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99, background: "#E1F5EE", color: "#0F6E56" }}>{r.type}</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{r.title}</h3>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99, background: "#E1F5EE", color: "#0F6E56" }}>{r.type}</span>
+                      <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99, background: statusColors[r.status]?.bg || "#f5f5f3", color: statusColors[r.status]?.color || "#888" }}>{r.status || "نشط"}</span>
+                    </div>
                   </div>
-                  <button onClick={() => handleContact(r.phone)} style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>واتساب</button>
+                  {r.status !== "ملغي" && r.status !== "تم العثور" && (
+                    <button onClick={() => handleContact(r.phone)} style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>واتساب</button>
+                  )}
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 13, color: "#666" }}>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 13, color: "#666", marginBottom: 12 }}>
                   {r.city && <span>📍 {r.city}{r.district ? ` · ${r.district}` : ""}</span>}
                   {r.mosque && <span>🕌 {r.mosque}</span>}
                   {r.date_from && <span>📅 {r.date_from}{r.date_to ? ` إلى ${r.date_to}` : ""}</span>}
                   {r.prayers && <span>🕐 {r.prayers}</span>}
                 </div>
-                {r.notes && <p style={{ fontSize: 13, color: "#888", marginTop: 10, borderTop: "1px solid #f0f0f0", paddingTop: 10 }}>{r.notes}</p>}
+
+                {/* زر الخريطة */}
+                {r.latitude && r.longitude && (
+                  <button onClick={() => openMap(r.latitude, r.longitude, r.mosque)} style={{ fontSize: 12, padding: "6px 14px", borderRadius: 8, border: "1px solid #ddd", background: "#f9f9f7", color: "#555", cursor: "pointer", marginBottom: 10 }}>
+                    🗺️ عرض على الخريطة
+                  </button>
+                )}
+
+                {r.notes && <p style={{ fontSize: 13, color: "#888", marginBottom: 12, borderTop: "1px solid #f0f0f0", paddingTop: 10 }}>{r.notes}</p>}
+
+                {user && r.user_id === user.id && (
+                  <div style={{ display: "flex", gap: 8, borderTop: "1px solid #f0f0f0", paddingTop: 12, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: "#888" }}>تغيير الحالة:</span>
+                    {r.status !== "مكتمل" && (
+                      <button onClick={() => handleStatusChange(r.id, "تم العثور")} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, border: "1px solid #185FA5", color: "#185FA5", background: "#E6F1FB", cursor: "pointer" }}>تم العثور ✅</button>
+                    )}
+                    {r.status !== "ملغي" && (
+                      <button onClick={() => handleStatusChange(r.id, "ملغي")} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, border: "1px solid #ddd", color: "#888", background: "#f5f5f3", cursor: "pointer" }}>إلغاء الطلب</button>
+                    )}
+                    {r.status !== "نشط" && (
+                      <button onClick={() => handleStatusChange(r.id, "نشط")} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, border: "1px solid #1D9E75", color: "#0F6E56", background: "#E1F5EE", cursor: "pointer" }}>إعادة تفعيل</button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
