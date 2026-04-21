@@ -20,16 +20,24 @@ export default function Login() {
     }
     setLoading(true);
     setMessage("");
-    const { error } = await supabase.auth.signInWithPassword({
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
     if (error) {
-      setMessage("خطأ: البريد أو كلمة المرور غير صحيحة");
+      setMessage("البريد أو كلمة المرور غير صحيحة");
       setLoading(false);
       return;
     }
-    window.location.href = "/dashboard";
+
+    if (data.session) {
+      window.location.href = "/dashboard";
+    } else {
+      setMessage("حدث خطأ، حاول مرة أخرى");
+      setLoading(false);
+    }
   };
 
   const inputStyle = {
@@ -59,34 +67,22 @@ export default function Login() {
     <div dir="rtl" style={{ fontFamily: "system-ui, sans-serif", minHeight: "100vh", background: "#f9f9f7", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eee", padding: 32, width: "100%", maxWidth: 400 }}>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+        <a href="/" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, textDecoration: "none" }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#1D9E75" }} />
-          <span style={{ fontSize: 18, fontWeight: 500 }}>مُناب</span>
-        </div>
+          <span style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>مُناب</span>
+        </a>
 
         <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 6 }}>تسجيل الدخول</h2>
         <p style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>أدخل بياناتك للدخول لحسابك</p>
 
         <label style={{ fontSize: 13, color: "#555", marginBottom: 4, display: "block" }}>البريد الإلكتروني</label>
-        <input
-          style={inputStyle}
-          type="email"
-          placeholder="example@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <input style={inputStyle} type="email" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
 
         <label style={{ fontSize: 13, color: "#555", marginBottom: 4, display: "block" }}>كلمة المرور</label>
-        <input
-          style={inputStyle}
-          type="password"
-          placeholder="كلمة المرور"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <input style={inputStyle} type="password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} />
 
         {message && (
-          <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: message.includes("خطأ") ? "#FFF3E0" : "#E1F5EE", color: message.includes("خطأ") ? "#E65100" : "#0F6E56", fontSize: 13 }}>
+          <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: message.includes("صحيحة") || message.includes("خطأ") ? "#FFF3E0" : "#E1F5EE", color: message.includes("صحيحة") || message.includes("خطأ") ? "#E65100" : "#0F6E56", fontSize: 13 }}>
             {message}
           </div>
         )}
@@ -98,12 +94,7 @@ export default function Login() {
         <p style={{ textAlign: "center", fontSize: 13, color: "#888", marginTop: 20 }}>
           ما عندك حساب؟ <a href="/register" style={{ color: "#1D9E75", textDecoration: "none" }}>سجّل الآن</a>
         </p>
-
-        <p style={{ textAlign: "center", fontSize: 13, color: "#888", marginTop: 8 }}>
-          <a href="/forgot-password" style={{ color: "#1D9E75", textDecoration: "none" }}>نسيت كلمة المرور؟</a>
-        </p>
       </div>
     </div>
   );
 }
-

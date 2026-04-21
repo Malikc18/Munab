@@ -148,7 +148,8 @@ export default function Register() {
     const finalDistrict = district === "أخرى" ? districtOther : district;
     if (userId) {
       await supabase.from("profiles").insert({
-        id: userId,
+  id: userId,
+  user_id: userId,
         name: form.name,
         type: form.types[0],
         city: city,

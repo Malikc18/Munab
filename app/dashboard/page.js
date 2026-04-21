@@ -8,10 +8,15 @@ const supabase = createClient(
 );
 
 const prayerOptions = ["الفجر", "الظهر", "العصر", "المغرب", "العشاء", "الجمعة", "التراويح"];
+const typeOptions = [
+  { value: "imam", label: "إمام" },
+  { value: "muathin", label: "مؤذن" },
+  { value: "both", label: "إمام ومؤذن" },
+  { value: "teacher", label: "معلم حلقة" },
+];
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -20,16 +25,26 @@ export default function Dashboard() {
   const [form, setForm] = useState({
     name: "", city: "", district: "", phone: "", skills: "",
     available: true, preferred_areas: "", preferred_prayers: [],
+    type: "", role: "",
   });
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = "/login"; return; }
-      setUser(user);
-      const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = "/login";
+        return;
+      }
+      const currentUser = session.user;
+      setUser(currentUser);
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUser.id)
+        .single();
+
       if (profile) {
-        setProfile(profile);
         setForm({
           name: profile.name || "",
           city: profile.city || "",
@@ -39,9 +54,17 @@ export default function Dashboard() {
           available: profile.available ?? true,
           preferred_areas: profile.preferred_areas || "",
           preferred_prayers: profile.preferred_prayers ? profile.preferred_prayers.split("، ") : [],
+          type: profile.type || "",
+          role: profile.role || "",
         });
       }
-      const { data: requests } = await supabase.from("requests").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+
+      const { data: requests } = await supabase
+        .from("requests")
+        .select("*")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false });
+
       if (requests) setMyRequests(requests);
       setLoading(false);
     }
@@ -58,6 +81,7 @@ export default function Dashboard() {
   };
 
   const handleSave = async () => {
+    if (!user) return;
     setSaving(true);
     setMessage("");
     const { error } = await supabase.from("profiles").update({
@@ -65,12 +89,20 @@ export default function Dashboard() {
       phone: form.phone, skills: form.skills, available: form.available,
       preferred_areas: form.preferred_areas,
       preferred_prayers: form.preferred_prayers.join("، "),
+      type: form.type,
+      role: form.role,
     }).eq("id", user.id);
-    setMessage(error ? "حدث خطأ أثناء الحفظ" : "تم حفظ التغييرات ✅");
+
+    if (error) {
+      setMessage("حدث خطأ: " + error.message);
+    } else {
+      setMessage("تم حفظ التغييرات ✅");
+    }
     setSaving(false);
   };
 
   const handleToggleAvailable = async () => {
+    if (!user) return;
     const newVal = !form.available;
     await supabase.from("profiles").update({ available: newVal }).eq("id", user.id);
     setForm({ ...form, available: newVal });
@@ -102,7 +134,6 @@ export default function Dashboard() {
   return (
     <div dir="rtl" style={{ fontFamily: "system-ui, sans-serif", minHeight: "100vh", background: "#f9f9f7" }}>
 
-      {/* الهيدر */}
       <div style={{ background: "#fff", borderBottom: "1px solid #eee", padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#1D9E75" }} />
@@ -119,13 +150,11 @@ export default function Dashboard() {
 
       <div style={{ maxWidth: 600, margin: "0 auto", padding: 24 }}>
 
-        {/* اسم المستخدم */}
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>أهلاً {form.name || ""}!</h1>
           <p style={{ fontSize: 13, color: "#888" }}>لوحة التحكم</p>
         </div>
 
-        {/* التبويبات */}
         <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "#f0f0ee", borderRadius: 10, padding: 4 }}>
           {[
             { key: "info", label: "معلوماتي" },
@@ -136,11 +165,17 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* معلوماتي */}
         {tab === "info" && (
           <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eee", padding: 20 }}>
             <label style={labelStyle}>الاسم</label>
             <input style={inputStyle} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+
+            <label style={labelStyle}>التخصص</label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              {typeOptions.map(t => (
+                <button key={t.value} onClick={() => setForm({ ...form, type: t.value, role: t.label })} style={{ padding: "7px 16px", borderRadius: 99, border: "1px solid", borderColor: form.type === t.value ? "#1D9E75" : "#ddd", background: form.type === t.value ? "#E1F5EE" : "#fff", color: form.type === t.value ? "#0F6E56" : "#666", fontSize: 13, cursor: "pointer" }}>{t.label}</button>
+              ))}
+            </div>
 
             <label style={labelStyle}>المدينة</label>
             <input style={inputStyle} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
@@ -163,7 +198,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* تفضيلاتي */}
         {tab === "prefs" && (
           <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eee", padding: 20 }}>
             <p style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>هذه المعلومات اختيارية وتساعد في تحسين نتائج البحث</p>
@@ -188,7 +222,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* طلباتي */}
         {tab === "requests" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
