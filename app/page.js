@@ -184,7 +184,7 @@ export default function Home() {
                       {p.name?.slice(0, 2)}
                     </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 500 }}>{p.name}</div>
+                      <a href={`/profile/${p.id}`} style={{ fontSize: 14, fontWeight: 500, color: "#000", textDecoration: "none" }}>{p.name}</a>
                       <div style={{ fontSize: 12, color: "#888" }}>{p.role}</div>
                     </div>
                   </div>
