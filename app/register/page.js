@@ -161,7 +161,10 @@ export default function Register() {
       });
     }
     setMessage("تم التسجيل! تحقق من بريدك الإلكتروني لتأكيد الحساب ✅");
-    setLoading(false);
+setLoading(false);
+setTimeout(() => {
+  window.location.href = "/login?verified=pending";
+}, 2000);
   };
 
   const inputStyle = {

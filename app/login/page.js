@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -13,6 +13,13 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("verified") === "pending") {
+      setMessage("تم التسجيل! تحقق من بريدك الإلكتروني لتأكيد حسابك ✅");
+    }
+  }, []);
+
   const handleLogin = async () => {
     if (!email || !password) {
       setMessage("يرجى تعبئة جميع الحقول");
@@ -20,18 +27,19 @@ export default function Login() {
     }
     setLoading(true);
     setMessage("");
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-
     if (error) {
-      setMessage("البريد أو كلمة المرور غير صحيحة");
+      if (error.message.includes("Email not confirmed")) {
+        setMessage("يرجى تأكيد بريدك الإلكتروني أولاً — تحقق من صندوق الوارد");
+      } else {
+        setMessage("البريد أو كلمة المرور غير صحيحة");
+      }
       setLoading(false);
       return;
     }
-
     if (data.session) {
       window.location.href = "/dashboard";
     } else {
@@ -40,27 +48,19 @@ export default function Login() {
     }
   };
 
-  const inputStyle = {
-    width: "100%",
-    border: "1px solid #ddd",
-    borderRadius: 8,
-    padding: "10px 14px",
-    fontSize: 14,
-    marginBottom: 12,
-    boxSizing: "border-box",
-    background: "#fff",
+  const handleGoogleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
   };
 
-  const btnStyle = {
-    width: "100%",
-    background: "#1D9E75",
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    padding: "12px",
-    fontSize: 15,
-    cursor: "pointer",
-    marginTop: 4,
+  const inputStyle = {
+    width: "100%", border: "1px solid #ddd", borderRadius: 8,
+    padding: "10px 14px", fontSize: 14, marginBottom: 12,
+    boxSizing: "border-box", background: "#fff",
   };
 
   return (
@@ -87,12 +87,23 @@ export default function Login() {
           </div>
         )}
 
-        <button style={btnStyle} onClick={handleLogin} disabled={loading}>
+        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#1D9E75", color: "#fff", border: "none", borderRadius: 8, padding: "12px", fontSize: 15, cursor: "pointer" }}>
           {loading ? "جاري الدخول..." : "دخول"}
+        </button>
+
+        <div style={{ textAlign: "center", margin: "16px 0", color: "#aaa", fontSize: 13 }}>أو</div>
+
+        <button onClick={handleGoogleLogin} style={{ width: "100%", background: "#fff", color: "#333", border: "1px solid #ddd", borderRadius: 8, padding: "11px", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#4285F4" }}>G</span>
+          دخول بحساب جوجل
         </button>
 
         <p style={{ textAlign: "center", fontSize: 13, color: "#888", marginTop: 20 }}>
           ما عندك حساب؟ <a href="/register" style={{ color: "#1D9E75", textDecoration: "none" }}>سجّل الآن</a>
+        </p>
+
+        <p style={{ textAlign: "center", fontSize: 13, color: "#888", marginTop: 8 }}>
+          <a href="/forgot-password" style={{ color: "#1D9E75", textDecoration: "none" }}>نسيت كلمة المرور؟</a>
         </p>
       </div>
     </div>
