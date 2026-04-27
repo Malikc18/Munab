@@ -19,28 +19,34 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [togglingAvail, setTogglingAvail] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) {
-        const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
         setUserProfile(profile);
       }
       const { data: profiles } = await supabase.from("profiles").select("*");
+      const { count } = await supabase.from("requests").select("*", { count: "exact", head: true }).eq("status", "نشط");
       if (profiles) {
         setData(profiles);
         setStats({
           total: profiles.length,
           available: profiles.filter(p => p.available).length,
-          requests: 0,
+          requests: count || 0,
         });
       }
       setLoading(false);
     }
     loadData();
   }, []);
+
+  const handleSearch = () => {
+    setSearch(searchInput);
+  };
 
   const toggleAvailable = async () => {
     if (!userProfile) return;
@@ -53,7 +59,7 @@ export default function Home() {
   };
 
   const filtered = data.filter((p) => {
-    const matchSearch = p.name?.includes(search) || p.city?.includes(search) || p.district?.includes(search);
+    const matchSearch = !search || p.name?.includes(search) || p.city?.includes(search) || p.district?.includes(search);
     const matchType = type === "all" || p.type === type;
     const matchAvail = !onlyAvailable || p.available;
     return matchSearch && matchType && matchAvail;
@@ -65,37 +71,35 @@ export default function Home() {
     window.open(`https://wa.me/${wa}`, "_blank");
   };
 
+  const inputStyle = {
+    flex: 1,
+    border: "1px solid #ddd",
+    borderRadius: 8,
+    padding: "10px 14px",
+    fontSize: 14,
+    background: "#fff",
+    color: "#333",
+    outline: "none",
+    WebkitTextFillColor: "#333",
+  };
+
   return (
     <div dir="rtl" style={{ fontFamily: "system-ui, sans-serif", minHeight: "100vh", background: "#f9f9f7" }}>
 
       {/* الهيدر */}
       <div style={{ background: "#fff", borderBottom: "1px solid #eee", padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#1D9E75" }} />
           <span style={{ fontSize: 18, fontWeight: 500, color: "#000" }}>مُناب</span>
         </a>
-
         <div style={{ display: "flex", gap: 16, fontSize: 14, color: "#666" }}>
           <a href="/requests" style={{ color: "#666", textDecoration: "none" }}>الطلبات</a>
           <a href="#how" style={{ color: "#666", textDecoration: "none" }}>كيف يعمل</a>
         </div>
-
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {user && userProfile ? (
             <>
-              <button
-                onClick={toggleAvailable}
-                disabled={togglingAvail}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "7px 14px", borderRadius: 99, border: "1px solid",
-                  borderColor: userProfile.available ? "#1D9E75" : "#E65100",
-                  background: userProfile.available ? "#E1F5EE" : "#FFF3E0",
-                  color: userProfile.available ? "#0F6E56" : "#E65100",
-                  fontSize: 13, cursor: "pointer",
-                }}
-              >
+              <button onClick={toggleAvailable} disabled={togglingAvail} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 99, border: "1px solid", borderColor: userProfile.available ? "#1D9E75" : "#E65100", background: userProfile.available ? "#E1F5EE" : "#FFF3E0", color: userProfile.available ? "#0F6E56" : "#E65100", fontSize: 13, cursor: "pointer" }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: userProfile.available ? "#1D9E75" : "#E65100" }} />
                 {togglingAvail ? "..." : userProfile.available ? "متاح" : "مشغول"}
               </button>
@@ -116,9 +120,22 @@ export default function Home() {
         <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 12, lineHeight: 1.5 }}>ابحث عن إمام أو مؤذن<br />أو معلم حلقة بديل</h1>
         <p style={{ color: "#666", fontSize: 15, marginBottom: 28, maxWidth: 480, margin: "0 auto 28px" }}>منصة تربط أئمة المساجد ومعلمي الحلقات بمن يحتاج بديلاً — بسهولة وسرعة وأمان</p>
         <div style={{ display: "flex", gap: 8, maxWidth: 500, margin: "0 auto 20px" }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث باسم المدينة أو الحي..." style={{ flex: 1, border: "1px solid #ddd", borderRadius: 8, padding: "10px 14px", fontSize: 14, background: "#fff" }} />
-          <button style={{ background: "#1D9E75", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, cursor: "pointer" }}>بحث</button>
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            placeholder="ابحث باسم أو مدينة أو حي..."
+            style={inputStyle}
+          />
+          <button onClick={handleSearch} style={{ background: "#1D9E75", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, cursor: "pointer", whiteSpace: "nowrap" }}>بحث</button>
         </div>
+        {search && (
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 13, color: "#888" }}>نتائج البحث عن: </span>
+            <span style={{ fontSize: 13, color: "#1D9E75", fontWeight: 500 }}>{search}</span>
+            <button onClick={() => { setSearch(""); setSearchInput(""); }} style={{ marginRight: 8, fontSize: 12, color: "#888", background: "none", border: "none", cursor: "pointer" }}>✕ مسح</button>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
           <button onClick={() => window.location.href = "/requests"} style={{ background: "#fff", color: "#1D9E75", border: "1px solid #1D9E75", borderRadius: 8, padding: "10px 24px", fontSize: 14, cursor: "pointer" }}>ارفع طلب</button>
         </div>
@@ -172,7 +189,10 @@ export default function Home() {
         {loading ? (
           <p style={{ textAlign: "center", color: "#999" }}>جاري التحميل...</p>
         ) : filtered.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#999" }}>لا توجد نتائج</p>
+          <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
+            <p style={{ fontSize: 16, marginBottom: 8 }}>لا توجد نتائج</p>
+            {search && <button onClick={() => { setSearch(""); setSearchInput(""); }} style={{ fontSize: 13, padding: "8px 16px", borderRadius: 8, border: "none", background: "#1D9E75", color: "#fff", cursor: "pointer" }}>مسح البحث</button>}
+          </div>
         ) : (
           <>
             <p style={{ fontSize: 13, color: "#999", marginBottom: 14 }}>{filtered.length} نتيجة</p>
@@ -180,7 +200,7 @@ export default function Home() {
               {filtered.map((p) => (
                 <div key={p.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: p.type === "teacher" ? "#EEEDFE" : "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 500, color: p.type === "teacher" ? "#534AB7" : "#0F6E56" }}>
+                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: p.type === "teacher" ? "#EEEDFE" : "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 500, color: p.type === "teacher" ? "#534AB7" : "#0F6E56", flexShrink: 0 }}>
                       {p.name?.slice(0, 2)}
                     </div>
                     <div>
